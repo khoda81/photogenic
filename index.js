@@ -1,24 +1,55 @@
 import("./pkg")
     .then((wasm) => {
-        wasm.greet();
+        const numColors = 64;
+
         const canvas = document.getElementById("drawing");
         const ctx = canvas.getContext("2d");
 
-        const realInput = document.getElementById("real");
-        const imaginaryInput = document.getElementById("imaginary");
+        const stepsInput = document.getElementById("steps");
+        const populationInput = document.getElementById("population");
         const renderBtn = document.getElementById("render");
+        const stepBtn = document.getElementById("step");
+
+        function initiate() {
+            let algo = wasm.initiate_algorithm(numColors);
+            algo.populate(parseInt(populationInput.value));
+            return algo;
+        }
 
         const render = () => {
-            // const real = parseFloat(realInput.value) || 0;
-            // const imaginary = parseFloat(imaginaryInput.value) || 0;
-            // wasm.draw(ctx, 600, 600, real, imaginary);
-            wasm.draw_colors();
+            wasm.render_best(ctx, algo, canvas.clientWidth, canvas.clientHeight);
+            requestAnimationFrame(render);
         };
 
-        realInput.addEventListener("change", render);
-        imaginaryInput.addEventListener("change", render);
-        renderBtn.addEventListener("click", render);
+        const step = () => {
+            const numSteps = parseInt(stepsInput.value);
+            for (let index = 0; index < numSteps; index++) {
+                algo.step();
+            }
+        };
+
+        let algo = initiate();
 
         render();
+
+        stepBtn.addEventListener("click", step);
+
+        document.addEventListener("keydown", (event) => {
+            if (event.code === "Space") {
+                step();
+                event.preventDefault();
+            }
+        });
+
+        populationInput.addEventListener("change", () => (algo = initiate()));
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+        }
+
+        resizeCanvas();
+
+        window.addEventListener("resize", resizeCanvas);
     })
     .catch(console.error);

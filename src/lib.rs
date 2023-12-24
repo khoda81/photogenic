@@ -1,139 +1,197 @@
+mod photogenic;
 mod utils;
 
-use std::ops::Add;
+use color_space::{FromRgb, ToRgb};
+use photogenic::{Gene, World};
+use rand::seq::SliceRandom;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::Clamped;
-use web_sys::{CanvasRenderingContext2d, ImageData};
+use web_sys::CanvasRenderingContext2d;
 
 #[wasm_bindgen]
 extern "C" {
     fn alert(s: &str);
 }
 
+#[derive(Clone, Debug)]
 #[wasm_bindgen]
-pub fn greet() {
-    // alert("Hello, photogenic!");
+pub struct GeneticAlgorithm {
+    world: World,
+    population: Vec<Gene>,
+    generation_idx: usize,
+}
+
+impl GeneticAlgorithm {
+    pub fn new(world: World) -> Self {
+        Self::with_population(world, vec![])
+    }
+
+    fn with_population(world: World, population: Vec<Gene>) -> GeneticAlgorithm {
+        Self {
+            world,
+            population,
+            generation_idx: 0,
+        }
+    }
+
+    pub fn fittest(&self) -> Option<(&Gene, f64)> {
+        self.population
+            .iter()
+            .map(|gene| (gene, self.world.fitness(gene)))
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+    }
 }
 
 #[wasm_bindgen]
-pub fn draw_colors(ctx: &CanvasRenderingContext2d, width: u32, height: u32) -> Result<(), JsValue> {
-    // Generate a vector of random RGB colors
-    let random_colors: Vec<[u8; 3]> = (0..width * height)
-        .map(|_| {
-            let r = js_sys::Math::floor(js_sys::Math::random() * 256.0) as u8;
-            let g = js_sys::Math::floor(js_sys::Math::random() * 256.0) as u8;
-            let b = js_sys::Math::floor(js_sys::Math::random() * 256.0) as u8;
-            [r, g, b]
-        })
-        .collect();
+impl GeneticAlgorithm {
+    pub fn populate(&mut self, count: usize) {
+        let iter = self.world.generate_population(count);
 
-    // Calculate the width of each bar
-    let bar_width = width as f64 / random_colors.len() as f64;
-
-    // Loop through each RGB color and draw a vertical bar
-    for (index, color) in random_colors.iter().enumerate() {
-        let [r, g, b] = *color;
-        let bar_height = (r as f64 + g as f64 + b as f64) / 3.0; // You can adjust this based on your preference
-
-        // Set the fill style to the current RGB color
-        ctx.set_fill_style(&JsValue::from_str(&format!("rgb({}, {}, {})", r, g, b)));
-
-        // Draw the vertical bar
-        ctx.fill_rect(
-            index as f64 * bar_width,
-            height as f64 - bar_height,
-            bar_width,
-            bar_height,
-        );
+        self.population.extend(iter)
     }
+
+    pub fn step(&mut self) {
+        let population_size = self.population.len();
+        let world = &self.world;
+        let mut population: Vec<_> = self
+            .population
+            .drain(..)
+            .map(move |gene| {
+                let fitness = world.fitness(&gene);
+                (gene, fitness)
+            })
+            .collect();
+
+        // .sort_by(|a, b| self.world.fitness(a).total_cmp(&self.world.fitness(b)));
+        population.sort_by(|(_, f_a), (_, f_b)| f_a.total_cmp(f_b).reverse());
+
+        // Take the best half
+        population.truncate(population_size * 10 / 100);
+
+        let rng = &mut rand::thread_rng();
+
+        while population.len() + self.population.len() < population_size {
+            let (gene, _) = population
+                .choose_weighted(rng, |&(_, fitness)| fitness)
+                .expect("fitness should all be positive");
+
+            let mut gene = gene.clone();
+            world.mutate(&mut gene);
+
+            self.population.push(gene);
+        }
+
+        self.population
+            .extend(population.into_iter().map(|(gene, _)| gene));
+
+        self.generation_idx += 1;
+    }
+}
+
+#[wasm_bindgen]
+pub fn initiate_algorithm(num_colors: usize) -> GeneticAlgorithm {
+    // let initial = color_space::Lab::from_rgb(&color_space::Rgb::from_hex(0xA14A76));
+    // let r#final = color_space::Lab::from_rgb(&color_space::Rgb::from_hex(0xFFD046));
+    // let colors = (0..num_colors)
+    //     .map(|idx| idx as f64 / num_colors as f64)
+    //     .map(|position| {
+    //         let color_space::Lab {
+    //             l: l0,
+    //             a: a0,
+    //             b: b0,
+    //         } = initial;
+
+    //         let color_space::Lab { l, a, b } = r#final;
+
+    //         color_space::Lab {
+    //             l: l * position + l0 * (1.0 - position),
+    //             a: a * position + a0 * (1.0 - position),
+    //             b: b * position + b0 * (1.0 - position),
+    //         }
+    //         .to_rgb()
+    //     });
+
+    // let world = World::new(colors);
+    let world = World::new([
+        color_space::Rgb::from_hex(0xf5b420),
+        color_space::Rgb::from_hex(0xf9ab4e),
+        color_space::Rgb::from_hex(0xee5c2b),
+        color_space::Rgb::from_hex(0xdd2a2b),
+        color_space::Rgb::from_hex(0xde4559),
+        color_space::Rgb::from_hex(0x912f39),
+        color_space::Rgb::from_hex(0x67981d),
+        color_space::Rgb::from_hex(0x1b4a1c),
+        color_space::Rgb::from_hex(0x347498),
+        color_space::Rgb::from_hex(0x212845),
+        color_space::Rgb::from_hex(0x1e1a17),
+        color_space::Rgb::from_hex(0x171914),
+    ]);
+    // let world = World::with_color_count(num_colors);
+
+    GeneticAlgorithm::new(world)
+}
+
+#[wasm_bindgen]
+pub fn render(ctx: &CanvasRenderingContext2d, width: u32, height: u32) -> Result<(), JsValue> {
+    // let num_colors = width;
+    let num_colors = 20;
+    let population_size = 100;
+    let generations = 1000;
+
+    let mut algo = initiate_algorithm(num_colors);
+
+    // Generate initial population of random genes
+    algo.populate(population_size);
+
+    // Evolution loop
+    (0..generations).for_each(|_| algo.step());
+
+    render_best(ctx, &algo, width, height);
 
     Ok(())
 }
 
 #[wasm_bindgen]
-pub fn draw(
+pub fn render_best(
     ctx: &CanvasRenderingContext2d,
+    algo: &GeneticAlgorithm,
     width: u32,
     height: u32,
-    real: f64,
-    imaginary: f64,
-) -> Result<(), JsValue> {
-    // The real workhorse of this algorithm, generating pixel data
-    let c = Complex { real, imaginary };
-    let data = get_julia_set(width, height, c);
-    let data = ImageData::new_with_u8_clamped_array_and_sh(Clamped(&data), width, height)?;
-    // ctx.put_image_data(&data, 0.0, 0.0)?;
-    // ctx.set_line_width(1.0);
+) {
+    let (best_gene, fitness) = algo.fittest().unwrap();
+    let colors: Vec<_> = algo.world.iter_colors(best_gene).collect();
+    let gen_idx = algo.generation_idx;
 
-    ctx.move_to(0.0, 0.0);
-    ctx.line_to(10.0, 10.0);
-    ctx.stroke();
+    // Calculate the width of each bar
+    let bar_width = 10.0;
+    let bar_height = 100.0;
 
-    Ok(())
-}
+    let total_width = bar_width * colors.len() as f64;
+    let x = (width as f64 - total_width) / 2.0;
+    let y = (height as f64 - bar_height) / 2.0;
 
-fn get_julia_set(width: u32, height: u32, c: Complex) -> Vec<u8> {
-    let mut data = Vec::new();
+    ctx.clear_rect(0.0, 0.0, width as f64, height as f64);
 
-    let param_i = 1.5;
-    let param_r = 1.5;
-    let scale = 0.005;
+    // Draw fitness as text
+    ctx.set_fill_style(&JsValue::from_str("black")); // Set text color
+    ctx.set_font("16px Arial"); // Set font size and type
+    ctx.fill_text(&format!("Fitness: {fitness:.2}"), 10.0, 20.0)
+        .expect("Failed to draw text");
 
-    for x in 0..width {
-        for y in 0..height {
-            let z = Complex {
-                real: y as f64 * scale - param_r,
-                imaginary: x as f64 * scale - param_i,
-            };
-            let iter_index = get_iter_index(z, c);
-            data.push((iter_index / 4) as u8);
-            data.push((iter_index / 2) as u8);
-            data.push(iter_index as u8);
-            data.push(255);
-        }
+    ctx.fill_text(&format!("Gen: {gen_idx}"), 10.0, 40.0)
+        .expect("Failed to draw text");
+
+    // Loop through each RGB color and draw a vertical bar
+    for (index, color) in colors.into_iter().enumerate() {
+        let color_space::Rgb { r, g, b } = color;
+
+        // Set the fill style to the current RGB color
+        ctx.set_fill_style(&JsValue::from_str(&format!("rgb({r}, {g}, {b})")));
+
+        // Draw the vertical bar
+        ctx.fill_rect(x + index as f64 * bar_width, y, bar_width, bar_height);
     }
 
-    data
-}
-
-fn get_iter_index(z: Complex, c: Complex) -> u32 {
-    let mut iter_index: u32 = 0;
-    let mut z = z;
-    while iter_index < 900 {
-        if z.norm() > 2.0 {
-            break;
-        }
-        z = z.square() + c;
-        iter_index += 1;
-    }
-    iter_index
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Complex {
-    real: f64,
-    imaginary: f64,
-}
-
-impl Complex {
-    fn square(self) -> Complex {
-        let real = (self.real * self.real) - (self.imaginary * self.imaginary);
-        let imaginary = 2.0 * self.real * self.imaginary;
-        Complex { real, imaginary }
-    }
-
-    fn norm(&self) -> f64 {
-        (self.real * self.real) + (self.imaginary * self.imaginary)
-    }
-}
-
-impl Add<Complex> for Complex {
-    type Output = Complex;
-
-    fn add(self, rhs: Complex) -> Complex {
-        Complex {
-            real: self.real + rhs.real,
-            imaginary: self.imaginary + rhs.imaginary,
-        }
-    }
+    // ctx.move_to(0.0, 0.0);
+    // ctx.line_to(width as f64, height as f64);
+    // ctx.stroke();
 }

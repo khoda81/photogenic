@@ -20,6 +20,8 @@ color_space = "0.5.3"
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
 js-sys = "0.3.66"
+rand = "0.8.5"
+getrandom = { version = "0.2.11", features = ["js"] }
 
 [dependencies.web-sys]
 version = "0.3.4"
@@ -30,3 +32,6 @@ wasm-bindgen-test = "0.3.34"
 
 [profile.release]
 opt-level = "s"
+
+[profile.dev]
+opt-level = 3
