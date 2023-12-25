@@ -1,6 +1,6 @@
 import("./pkg")
     .then((wasm) => {
-        const numColors = 64;
+        const numColors = 128;
 
         const canvas = document.getElementById("drawing");
         const ctx = canvas.getContext("2d");
@@ -17,6 +17,8 @@ import("./pkg")
         }
 
         const render = () => {
+            step();
+
             wasm.render_best(ctx, algo, canvas.clientWidth, canvas.clientHeight);
             requestAnimationFrame(render);
         };
@@ -35,10 +37,10 @@ import("./pkg")
         stepBtn.addEventListener("click", step);
 
         document.addEventListener("keydown", (event) => {
-            if (event.code === "Space") {
-                step();
-                event.preventDefault();
-            }
+            // if (event.code === "Space") {
+            //     step();
+            //     event.preventDefault();
+            // }
         });
 
         populationInput.addEventListener("change", () => (algo = initiate()));

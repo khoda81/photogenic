@@ -1,9 +1,11 @@
 mod photogenic;
 mod utils;
 
-use color_space::{FromRgb, ToRgb};
 use photogenic::{Gene, World};
-use rand::seq::SliceRandom;
+use rand::{
+    distributions::{Distribution, WeightedIndex},
+    Rng,
+};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -18,6 +20,7 @@ pub struct GeneticAlgorithm {
     world: World,
     population: Vec<Gene>,
     generation_idx: usize,
+    pub mutation_rate: f64,
 }
 
 impl GeneticAlgorithm {
@@ -30,6 +33,7 @@ impl GeneticAlgorithm {
             world,
             population,
             generation_idx: 0,
+            mutation_rate: 1.0,
         }
     }
 
@@ -51,37 +55,44 @@ impl GeneticAlgorithm {
 
     pub fn step(&mut self) {
         let population_size = self.population.len();
-        let world = &self.world;
-        let mut population: Vec<_> = self
-            .population
-            .drain(..)
-            .map(move |gene| {
-                let fitness = world.fitness(&gene);
+
+        let mut population: Vec<_> = std::mem::take(&mut self.population)
+            .into_iter()
+            .map(|gene| {
+                let fitness = self.world.fitness(&gene);
                 (gene, fitness)
             })
             .collect();
 
-        // .sort_by(|a, b| self.world.fitness(a).total_cmp(&self.world.fitness(b)));
-        population.sort_by(|(_, f_a), (_, f_b)| f_a.total_cmp(f_b).reverse());
+        population.sort_by(|(_, f_a), (_, f_b)| f64::total_cmp(f_a, f_b));
+        let (best, _) = population
+            .last()
+            .expect("the world should be populated before calling step")
+            .clone();
 
-        // Take the best half
-        population.truncate(population_size * 10 / 100);
+        // Keep the best alive
+        self.population.push(best);
+
+        // population.shrink_to(population_size * 100 / 100);
 
         let rng = &mut rand::thread_rng();
 
-        while population.len() + self.population.len() < population_size {
-            let (gene, _) = population
-                .choose_weighted(rng, |&(_, fitness)| fitness)
-                .expect("fitness should all be positive");
+        let sampler = WeightedIndex::new(population.iter().map(|&(_, fitness)| fitness))
+            .expect("fitness should all be positive");
 
-            let mut gene = gene.clone();
-            world.mutate(&mut gene);
+        while self.population.len() < population_size {
+            // Select a random gene based on fitness score
+            let selected_idx = sampler.sample(rng);
+            let mut gene = population[selected_idx].0.clone();
+
+            // Mutate it with probability=mutation_rate
+            let mutate = rng.gen_bool(self.mutation_rate);
+            if mutate {
+                self.world.mutate(&mut gene);
+            }
 
             self.population.push(gene);
         }
-
-        self.population
-            .extend(population.into_iter().map(|(gene, _)| gene));
 
         self.generation_idx += 1;
     }
@@ -111,21 +122,21 @@ pub fn initiate_algorithm(num_colors: usize) -> GeneticAlgorithm {
     //     });
 
     // let world = World::new(colors);
-    let world = World::new([
-        color_space::Rgb::from_hex(0xf5b420),
-        color_space::Rgb::from_hex(0xf9ab4e),
-        color_space::Rgb::from_hex(0xee5c2b),
-        color_space::Rgb::from_hex(0xdd2a2b),
-        color_space::Rgb::from_hex(0xde4559),
-        color_space::Rgb::from_hex(0x912f39),
-        color_space::Rgb::from_hex(0x67981d),
-        color_space::Rgb::from_hex(0x1b4a1c),
-        color_space::Rgb::from_hex(0x347498),
-        color_space::Rgb::from_hex(0x212845),
-        color_space::Rgb::from_hex(0x1e1a17),
-        color_space::Rgb::from_hex(0x171914),
-    ]);
-    // let world = World::with_color_count(num_colors);
+    // let world = World::new([
+    //     color_space::Rgb::from_hex(0xf5b420),
+    //     color_space::Rgb::from_hex(0xf9ab4e),
+    //     color_space::Rgb::from_hex(0xee5c2b),
+    //     color_space::Rgb::from_hex(0xdd2a2b),
+    //     color_space::Rgb::from_hex(0xde4559),
+    //     color_space::Rgb::from_hex(0x912f39),
+    //     color_space::Rgb::from_hex(0x67981d),
+    //     color_space::Rgb::from_hex(0x1b4a1c),
+    //     color_space::Rgb::from_hex(0x347498),
+    //     color_space::Rgb::from_hex(0x212845),
+    //     color_space::Rgb::from_hex(0x1e1a17),
+    //     color_space::Rgb::from_hex(0x171914),
+    // ]);
+    let world = World::with_random_colors(num_colors);
 
     GeneticAlgorithm::new(world)
 }
@@ -163,7 +174,7 @@ pub fn render_best(
 
     // Calculate the width of each bar
     let bar_width = 10.0;
-    let bar_height = 100.0;
+    let bar_height = 200.0;
 
     let total_width = bar_width * colors.len() as f64;
     let x = (width as f64 - total_width) / 2.0;

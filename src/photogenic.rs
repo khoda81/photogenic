@@ -1,11 +1,7 @@
 use wasm_bindgen::prelude::*;
 
-use color_space::{CompareCie2000, Rgb};
-use rand::{
-    distributions::{Distribution, WeightedIndex},
-    seq::SliceRandom,
-    Rng,
-};
+use color_space::{CompareCie2000, Rgb, ToRgb};
+use rand::{seq::SliceRandom, Rng};
 
 pub type Color = Rgb;
 
@@ -15,23 +11,29 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(colors: impl Into<Vec<Color>>) -> Self {
+    pub fn new(colors: impl IntoIterator<Item = Color>) -> Self {
         Self {
-            colors: colors.into(),
+            colors: colors.into_iter().collect(),
         }
     }
 
-    pub fn with_color_count(count: usize) -> Self {
+    pub fn with_random_colors(count: usize) -> Self {
         let mut rng = rand::thread_rng();
 
         Self::new(
             (0..count)
                 .map(|_| {
                     color_space::Rgb::new(
-                        rng.gen_range(0.0..256.0), // r
-                        rng.gen_range(0.0..256.0), // g
-                        rng.gen_range(0.0..256.0), // b
+                        rng.gen_range(0.0..256.0),
+                        rng.gen_range(0.0..256.0),
+                        rng.gen_range(0.0..256.0),
                     )
+                    // color_space::Lab::new(
+                    //     rng.gen_range(0.0..256.0),
+                    //     rng.gen_range(-256.0..256.0),
+                    //     rng.gen_range(-256.0..256.0),
+                    // )
+                    // .to_rgb()
                 })
                 .collect::<Vec<_>>(),
         )
@@ -53,7 +55,7 @@ impl World {
     pub fn fitness(&self, gene: &Gene) -> f64 {
         self.iter_colors(gene)
             .zip(self.iter_colors(gene).skip(1))
-            .map(|(curr, next)| similarity(curr, next))
+            .map(|(cur, next)| similarity(cur, next))
             .sum()
     }
 
@@ -73,7 +75,7 @@ extern "C" {
     fn log_weights(s: &[f64]);
 
     #[wasm_bindgen(js_namespace = console, js_name = log)]
-    fn log_str(s: &str);
+    pub fn log_str(s: &str);
 }
 
 impl Gene {
@@ -84,7 +86,8 @@ impl Gene {
     }
 
     fn mutate(&mut self, world: &World) {
-        self.mutate_by_rotation(world);
+        self.mutate_by_rotation();
+        self.mutate_by_reversing();
 
         // let rng = &mut rand::thread_rng();
         // let num_rotations = rng.gen_range(1..self.permutation.len());
@@ -97,42 +100,24 @@ impl Gene {
         // }
     }
 
-    fn mutate_by_rotation(&mut self, world: &World) {
+    fn mutate_by_rotation(&mut self) {
+        let slice = self.select_random_slice();
+
+        let rotation_amount = rand::thread_rng().gen_range(1..slice.len());
+        slice.rotate_left(rotation_amount)
+    }
+
+    fn mutate_by_reversing(&mut self) {
+        let slice = self.select_random_slice();
+        slice.reverse()
+    }
+
+    fn select_random_slice(&mut self) -> &mut [usize] {
         let rng = &mut rand::thread_rng();
-        let mut idx1 = rng.gen_range(0..self.indices.len());
-        let color1 = world.colors[self.indices[idx1]];
+        let idx1 = rng.gen_range(0..self.indices.len() - 2);
+        let idx2 = rng.gen_range(idx1 + 2..=self.indices.len());
 
-        let mut weights: Vec<_> = (0..self.indices.len())
-            .map(|idx| similarity(color1, world.colors[self.indices[idx]]))
-            .collect();
-
-        weights[idx1] = 0.0;
-
-        let weighted = match WeightedIndex::new(weights) {
-            Ok(weighted) => weighted,
-            Err(_) => {
-                log_str("found non negative similarity");
-                return;
-            }
-        };
-
-        let idx2 = weighted.sample(rng);
-        let step = if idx1 <= idx2 { 1 } else { -1_isize as usize };
-        while idx1 != idx2 {
-            let next_idx = idx1.wrapping_add(step);
-            self.indices.swap(idx1, next_idx);
-
-            idx1 = next_idx;
-        }
-        // if idx1 <= idx2 {
-        //     for idx in idx1..idx2 - 1 {
-        //         self.indices.swap(idx, idx + 1);
-        //     }
-        // } else {
-        //     for idx in (idx2 + 1..idx1).rev() {
-        //         self.indices.swap(idx, idx - 1);
-        //     }
-        // }
+        &mut self.indices[idx1..idx2]
     }
 
     // pub fn crossover(&self, other: &Gene<'a>) -> Gene<'a> {
@@ -165,8 +150,8 @@ impl Gene {
     // }
 }
 
-fn similarity(color1: Rgb, color2: Rgb) -> f64 {
+fn similarity(color1: Color, color2: Color) -> f64 {
     let distance = color1.compare_cie2000(&color2);
 
-    150.0 - distance
+    1.0 / (distance + 0.0001)
 }
