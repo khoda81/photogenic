@@ -1,3 +1,5 @@
+use std::{borrow::BorrowMut, collections::BTreeSet, iter::FromIterator};
+
 use color_space::{CompareCie2000, Rgb};
 use rand::{seq::SliceRandom, Rng};
 
@@ -185,38 +187,23 @@ impl Gene {
         // Select random subset of first parent's gene
         let start = rng.gen_range(0..len);
         let end = rng.gen_range(start..len);
+        let selected_slice = &parent_1.indices[start..end];
 
-        // Initialize child with None values
-        let mut child_indices: Vec<Option<usize>> = vec![None; len];
+        let mut picked_indices = BTreeSet::from_iter(selected_slice.iter().copied());
+        let mut indices = Vec::with_capacity(len);
 
-        // Copy subset from first parent to child
-        for i in start..end {
-            child_indices[i] = Some(parent_1.indices[i]);
-        }
+        let mut filtered_indices = parent_2
+            .indices
+            .iter()
+            .filter(|&idx| picked_indices.insert(*idx));
 
-        // Fill remaining values from second parent
-        let mut j = 0;
-        for i in 0..len {
-            // Skip values already in child
-            if child_indices.contains(&Some(parent_2.indices[i])) {
-                continue;
-            }
-
-            // Find next None position in child
-            while child_indices[j].is_some() {
-                j = (j + 1) % len; // Wrap around if at end
-            }
-
-            // Copy value from second parent to child
-            child_indices[j] = Some(parent_2.indices[i]);
-        }
-
-        // Unwrap values in child_indices
-        let child_indices: Vec<usize> = child_indices.into_iter().map(Option::unwrap).collect();
+        indices.extend(filtered_indices.borrow_mut().take(start).copied());
+        indices.extend_from_slice(selected_slice);
+        indices.extend(filtered_indices.copied());
 
         // Return new Gene with child_indices and mutated probabilities
         Gene {
-            indices: child_indices,
+            indices,
             probs: parent_1.probs.crossover(&parent_2.probs),
         }
     }

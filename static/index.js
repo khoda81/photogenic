@@ -1,4 +1,8 @@
-import("./pkg")
+import "./css/normalize.css";
+import "./css/skeleton.css";
+import "./css/style.css";
+
+import("../pkg")
     .then((wasm) => {
         const canvas = document.getElementById("drawing");
         const ctx = canvas.getContext("2d");
@@ -9,11 +13,12 @@ import("./pkg")
 
         let numColors = parseInt(colorInput.value);
 
-        let algo;
+        let algo = wasm.initiate_algorithm(numColors);
+        algo.set_population_size(parseInt(populationInput.value));
+
         function reset() {
             algo = wasm.initiate_algorithm(numColors);
             algo.set_population_size(parseInt(populationInput.value));
-            return algo;
         }
 
         const render = () => {
@@ -33,7 +38,6 @@ import("./pkg")
             canvas.height = canvas.clientHeight;
         }
 
-        reset();
         render();
 
         setInterval(() => {
