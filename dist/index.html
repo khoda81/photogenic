@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Color Sorter</title>
+        <link rel="stylesheet" href="css/normalize.css" />
+        <link rel="stylesheet" href="css/skeleton.css" />
+        <link rel="stylesheet" href="css/style.css" />
+    <script defer src="index.js"></script></head>
+    <body>
+        <main>
+            <div class="controls">
+                <div>
+                    <label for="population">population</label>
+                    <input type="number" name="population" id="population" value="100" step="1" min="1" />
+                </div>
+                <div>
+                    <label for="colors">colors</label>
+                    <input type="number" name="colors" id="colors" value="64" step="1" min="1" />
+                </div>
+                <button class="button-primary" id="reset">reset</button>
+            </div>
+            <canvas id="drawing"></canvas>
+        </main>
+    </body>
+</html>
