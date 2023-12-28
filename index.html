@@ -12,15 +12,14 @@
         <main>
             <div class="controls">
                 <div>
-                    <label for="steps">steps</label>
-                    <input type="number" name="steps" id="steps" value="1" step="1" min="1" />
-                </div>
-                <div>
                     <label for="population">population</label>
                     <input type="number" name="population" id="population" value="100" step="1" min="1" />
                 </div>
-                <button class="button-primary" id="render">render</button>
-                <button class="button-primary" id="step">step</button>
+                <div>
+                    <label for="colors">colors</label>
+                    <input type="number" name="colors" id="colors" value="64" step="1" min="1" />
+                </div>
+                <button class="button-primary" id="reset">reset</button>
             </div>
             <canvas id="drawing"></canvas>
         </main>

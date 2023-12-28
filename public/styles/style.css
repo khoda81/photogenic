@@ -13,6 +13,7 @@ main {
 
 main > #drawing {
     flex-grow: 1;
+    height: 0;
 }
 
 .controls {

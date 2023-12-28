@@ -1,6 +1,4 @@
-use wasm_bindgen::prelude::*;
-
-use color_space::{CompareCie2000, Rgb, ToRgb};
+use color_space::{CompareCie2000, Rgb};
 use rand::{seq::SliceRandom, Rng};
 
 pub type Color = Rgb;
@@ -28,12 +26,6 @@ impl World {
                         rng.gen_range(0.0..256.0),
                         rng.gen_range(0.0..256.0),
                     )
-                    // color_space::Lab::new(
-                    //     rng.gen_range(0.0..256.0),
-                    //     rng.gen_range(-256.0..256.0),
-                    //     rng.gen_range(-256.0..256.0),
-                    // )
-                    // .to_rgb()
                 })
                 .collect::<Vec<_>>(),
         )
@@ -60,94 +52,178 @@ impl World {
     }
 
     pub fn mutate(&self, gene: &mut Gene) {
-        gene.mutate(self)
+        gene.mutate()
+    }
+}
+
+fn mutate_prob(value: f64) -> f64 {
+    // You can adjust the mutation range as needed
+    let mutation_range = 0.05;
+
+    // Generate a random value within the mutation range
+    let mutation = rand::thread_rng().gen_range(-mutation_range..mutation_range);
+
+    // Apply the mutation to the original value
+    (value + mutation).max(0.0).min(1.0)
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Probs {
+    rotation: f64,
+    reverse: f64,
+    random_rotate: f64,
+}
+
+impl Probs {
+    fn new() -> Self {
+        Probs {
+            rotation: 0.2,
+            reverse: 0.7,
+            random_rotate: 0.2,
+        }
+    }
+
+    fn mutate(&mut self) {
+        // Mutate each field with a small random value
+        self.rotation = mutate_prob(self.rotation);
+        self.reverse = mutate_prob(self.reverse);
+        self.random_rotate = mutate_prob(self.random_rotate);
+    }
+
+    fn crossover(&self, other: &Self) -> Self {
+        let mut rng = rand::thread_rng();
+
+        Probs {
+            rotation: if rng.gen_bool(0.5) {
+                self.rotation
+            } else {
+                other.rotation
+            },
+            reverse: if rng.gen_bool(0.5) {
+                self.reverse
+            } else {
+                other.reverse
+            },
+            random_rotate: if rng.gen_bool(0.5) {
+                self.random_rotate
+            } else {
+                other.random_rotate
+            },
+        }
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Gene {
     indices: Vec<usize>,
+    probs: Probs,
 }
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    fn log_weights(s: &[f64]);
+trait RandomSubslice {
+    fn select_random_subslice_mut(&mut self) -> &mut Self;
+}
 
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    pub fn log_str(s: &str);
+impl<T> RandomSubslice for [T] {
+    fn select_random_subslice_mut(&mut self) -> &mut [T] {
+        let rng = &mut rand::thread_rng();
+        let idx1 = rng.gen_range(0..self.len() - 2);
+        let idx2 = rng.gen_range(idx1 + 2..=self.len());
+
+        &mut self[idx1..idx2]
+    }
 }
 
 impl Gene {
     fn new(count: usize) -> Self {
         Gene {
             indices: (0..count).collect(),
+            probs: Probs::new(),
         }
     }
 
-    fn mutate(&mut self, world: &World) {
-        self.mutate_by_rotation();
-        self.mutate_by_reversing();
+    fn mutate(&mut self) {
+        if rand::thread_rng().gen_bool(self.probs.rotation) {
+            self.rotate_random_subsequence()
+        } else if rand::thread_rng().gen_bool(self.probs.reverse) {
+            self.reverse_random_subsequence()
+        } else {
+            self.swap_random_positions()
+        }
 
-        // let rng = &mut rand::thread_rng();
-        // let num_rotations = rng.gen_range(1..self.permutation.len());
-
-        // for _ in 0..num_rotations {
-        //     let idx1 = rng.gen_range(0..self.permutation.len());
-        //     let idx2 = rng.gen_range(idx1..self.permutation.len());
-
-        //     self.permutation.swap(idx1, idx2);
-        // }
+        self.probs.mutate()
     }
 
-    fn mutate_by_rotation(&mut self) {
-        let slice = self.select_random_slice();
+    fn rotate_random_subsequence(&mut self) {
+        let slice = self.indices.select_random_subslice_mut();
+        let rng = &mut rand::thread_rng();
 
-        let rotation_amount = rand::thread_rng().gen_range(1..slice.len());
+        let rotation_amount = if rng.gen_bool(self.probs.random_rotate) {
+            rng.gen_range(1..slice.len())
+        } else {
+            1
+        };
+
         slice.rotate_left(rotation_amount)
     }
 
-    fn mutate_by_reversing(&mut self) {
-        let slice = self.select_random_slice();
-        slice.reverse()
+    fn reverse_random_subsequence(&mut self) {
+        self.indices.select_random_subslice_mut().reverse()
     }
 
-    fn select_random_slice(&mut self) -> &mut [usize] {
+    fn swap_random_positions(&mut self) {
         let rng = &mut rand::thread_rng();
-        let idx1 = rng.gen_range(0..self.indices.len() - 2);
-        let idx2 = rng.gen_range(idx1 + 2..=self.indices.len());
+        let idx1 = rng.gen_range(0..self.indices.len());
+        let idx2 = rng.gen_range(0..self.indices.len());
 
-        &mut self.indices[idx1..idx2]
+        self.indices.swap(idx1, idx2)
     }
 
-    // pub fn crossover(&self, other: &Gene<'a>) -> Gene<'a> {
-    //     let mut rng = rand::thread_rng();
-    //     let mut child_permutation = vec![0; self.permutation.len()];
+    pub fn crossover(parent_1: &Self, parent_2: &Self) -> Self {
+        let len = parent_1.indices.len();
+        let mut rng = rand::thread_rng();
 
-    //     // Determine the segment to copy from the first parent
-    //     let start_point = rng.gen_range(0..self.permutation.len());
-    //     let end_point = rng.gen_range(start_point + 1..=self.permutation.len());
+        // Select random subset of first parent's gene
+        let start = rng.gen_range(0..len);
+        let end = rng.gen_range(start..len);
 
-    //     // Copy the segment from the first parent to the child
-    //     child_permutation[start_point..end_point].clone_from_slice(&self.permutation[start_point..end_point]);
+        // Initialize child with None values
+        let mut child_indices: Vec<Option<usize>> = vec![None; len];
 
-    //     // Fill in the remaining positions with genes from the second parent
-    //     let mut remaining_positions: Vec<usize> = (0..self.permutation.len()).filter(|&i| i < start_point || i >= end_point).collect();
-    //     let mut remaining_genes = other.permutation.iter().filter(|&gene| !child_permutation.contains(gene)).cycle();
+        // Copy subset from first parent to child
+        for i in start..end {
+            child_indices[i] = Some(parent_1.indices[i]);
+        }
 
-    //     for i in 0..self.permutation.len() {
-    //         if i < start_point || i >= end_point {
-    //             if let Some(gene) = remaining_positions.pop().map(|p| remaining_genes.nth(p).unwrap()) {
-    //                 child_permutation[i] = *gene;
-    //             }
-    //         }
-    //     }
+        // Fill remaining values from second parent
+        let mut j = 0;
+        for i in 0..len {
+            // Skip values already in child
+            if child_indices.contains(&Some(parent_2.indices[i])) {
+                continue;
+            }
 
-    //     Gene {
-    //         colors: self.colors,
-    //         permutation: child_permutation,
-    //     }
-    // }
+            // Find next None position in child
+            while child_indices[j].is_some() {
+                j = (j + 1) % len; // Wrap around if at end
+            }
+
+            // Copy value from second parent to child
+            child_indices[j] = Some(parent_2.indices[i]);
+        }
+
+        // Unwrap values in child_indices
+        let child_indices: Vec<usize> = child_indices.into_iter().map(Option::unwrap).collect();
+
+        // Return new Gene with child_indices and mutated probabilities
+        Gene {
+            indices: child_indices,
+            probs: parent_1.probs.crossover(&parent_2.probs),
+        }
+    }
+
+    pub fn probs(&self) -> Probs {
+        self.probs
+    }
 }
 
 fn similarity(color1: Color, color2: Color) -> f64 {
