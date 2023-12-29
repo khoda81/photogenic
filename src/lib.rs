@@ -161,7 +161,7 @@ pub fn render_best(
     let num_colors = colors.len() as f64;
 
     // Calculate the width of each bar
-    let bar_width = (width / num_colors).min(10.0);
+    let bar_width = ((width - 24.0) / num_colors).min(10.0);
     let bar_height = 200.0;
 
     let total_width = bar_width * num_colors;
