@@ -44,13 +44,13 @@ impl GeneticAlgorithm {
 #[wasm_bindgen]
 impl GeneticAlgorithm {
     pub fn populate(&mut self, count: usize) {
-        let new_population = self.world.generate_population(count);
+        let new_population = self.world.generate_population().take(count);
         self.population.extend(new_population)
     }
 
     pub fn set_population_size(&mut self, new_size: usize) {
-        if let Some(best) = self.population.first().cloned() {
-            self.population.resize(new_size, best);
+        if let Some(best) = self.population.first() {
+            self.population.resize(new_size, best.clone());
         } else {
             self.populate(new_size)
         }
@@ -76,18 +76,24 @@ impl GeneticAlgorithm {
         // Keep the best alive
         self.population.push(best.clone());
 
+        // Compute the weights
         let weights = population
             .iter()
+            // Subtract min_fitness from all fitnesses
             .map(|&(_, fitness)| fitness - min_fitness + 0.0001);
 
-        let sampler = WeightedIndex::new(weights).expect("fitness should all be positive");
+        let sampler = WeightedIndex::new(weights)
+            // Error handling
+            .expect("fitness should all be positive");
 
+        // Get the random number generator
         let rng = &mut rand::thread_rng();
         while self.population.len() < population_size {
             // Select two random parents based on the fitness score
             let (parent_1, _) = &population[sampler.sample(rng)];
             let (parent_2, _) = &population[sampler.sample(rng)];
 
+            // Perform the crossover
             let mut gene = Gene::crossover(parent_1, parent_2);
 
             // Mutate it with probability=mutation_rate
@@ -105,18 +111,17 @@ impl GeneticAlgorithm {
 #[wasm_bindgen]
 pub fn initiate_algorithm(num_colors: usize) -> GeneticAlgorithm {
     // use color_space::{FromRgb, ToRgb};
-    // let initial = color_space::Lab::from_rgb(&color_space::Rgb::from_hex(0));
-    // let r#final = color_space::Lab::from_rgb(&color_space::Rgb::from_hex(0xFFFFFF));
     // let colors: Vec<_> = (0..num_colors)
-    //     .map(|idx| idx as f64 / num_colors as f64)
+    //     .map(|idx| idx as f64 / (num_colors - 1) as f64)
     //     .map(|position| {
     //         let color_space::Lab {
     //             l: l0,
     //             a: a0,
     //             b: b0,
-    //         } = initial;
+    //         } = color_space::Lab::from_rgb(&color_space::Rgb::from_hex(0));
 
-    //         let color_space::Lab { l, a, b } = r#final;
+    //         let color_space::Lab { l, a, b } =
+    //             color_space::Lab::from_rgb(&color_space::Rgb::from_hex(0xFFFFFF));
 
     //         color_space::Lab {
     //             l: l * position + l0 * (1.0 - position),
@@ -127,21 +132,13 @@ pub fn initiate_algorithm(num_colors: usize) -> GeneticAlgorithm {
     //     })
     //     .collect();
 
+    // let colors = [
+    //     0xf5b420, 0xf9ab4e, 0xee5c2b, 0xdd2a2b, 0xde4559, 0x912f39, 0x67981d, 0x1b4a1c, 0x347498,
+    //     0x212845, 0x1e1a17, 0x171914,
+    // ]
+    // .map(color_space::Rgb::from_hex);
+
     // let world = World::new(colors);
-    // let world = World::new([
-    //     color_space::Rgb::from_hex(0xf5b420),
-    //     color_space::Rgb::from_hex(0xf9ab4e),
-    //     color_space::Rgb::from_hex(0xee5c2b),
-    //     color_space::Rgb::from_hex(0xdd2a2b),
-    //     color_space::Rgb::from_hex(0xde4559),
-    //     color_space::Rgb::from_hex(0x912f39),
-    //     color_space::Rgb::from_hex(0x67981d),
-    //     color_space::Rgb::from_hex(0x1b4a1c),
-    //     color_space::Rgb::from_hex(0x347498),
-    //     color_space::Rgb::from_hex(0x212845),
-    //     color_space::Rgb::from_hex(0x1e1a17),
-    //     color_space::Rgb::from_hex(0x171914),
-    // ]);
     let world = World::with_random_colors(num_colors);
 
     GeneticAlgorithm::new(world)

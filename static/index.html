@@ -9,12 +9,24 @@
         <main>
             <div class="controls">
                 <div>
-                    <label for="population">population</label>
+                    <label for="population">Population</label>
                     <input type="number" name="population" id="population" value="100" step="1" min="1" />
                 </div>
                 <div>
-                    <label for="colors">colors</label>
+                    <label for="colors">Number of Colors</label>
                     <input type="number" name="colors" id="colors" value="64" step="1" min="1" />
+                </div>
+                <div>
+                    <label for="mutation_rate">Mutation Rate</label>
+                    <input
+                        type="number"
+                        name="mutation_rate"
+                        id="mutation_rate"
+                        value="0.1"
+                        step="0.01"
+                        min="0.0"
+                        max="1.0"
+                    />
                 </div>
                 <button class="button-primary" id="reset">reset</button>
             </div>

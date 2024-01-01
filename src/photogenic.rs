@@ -11,9 +11,9 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(colors: impl IntoIterator<Item = Color>) -> Self {
+    pub fn new(colors: impl IntoIterator<Item = impl Into<Color>>) -> Self {
         Self {
-            colors: colors.into_iter().collect(),
+            colors: colors.into_iter().map(Into::into).collect(),
         }
     }
 
@@ -33,10 +33,9 @@ impl World {
         )
     }
 
-    pub fn generate_population(&self, count: usize) -> impl Iterator<Item = Gene> + '_ {
-        (0..count).map(move |_| {
+    pub fn generate_population(&self) -> impl Iterator<Item = Gene> + '_ {
+        std::iter::repeat_with(move || {
             let mut gene = Gene::new(self.colors.len());
-
             gene.indices.shuffle(&mut rand::thread_rng());
             gene
         })
@@ -47,10 +46,13 @@ impl World {
     }
 
     pub fn fitness(&self, gene: &Gene) -> f64 {
-        self.iter_colors(gene)
-            .zip(self.iter_colors(gene).skip(1))
+        self.color_pairs(gene)
             .map(|(cur, next)| similarity(cur, next))
             .sum()
+    }
+
+    fn color_pairs<'a>(&'a self, gene: &'a Gene) -> impl Iterator<Item = (Color, Color)> + 'a {
+        self.iter_colors(gene).zip(self.iter_colors(gene).skip(1))
     }
 
     pub fn mutate(&self, gene: &mut Gene) {
@@ -151,8 +153,6 @@ impl Gene {
         } else {
             self.swap_random_positions()
         }
-
-        self.probs.mutate()
     }
 
     fn rotate_random_subsequence(&mut self) {
@@ -179,29 +179,41 @@ impl Gene {
 
         self.indices.swap(idx1, idx2)
     }
-
+    // A function to perform crossover between two parents to create a new child gene
     pub fn crossover(parent_1: &Self, parent_2: &Self) -> Self {
+        // Determine the length of the gene indices
         let len = parent_1.indices.len();
+
+        // Initialize a random number generator
         let mut rng = rand::thread_rng();
 
-        // Select random subset of first parent's gene
+        // Select a random subset of indices from the first parent's gene
         let start = rng.gen_range(0..len);
         let end = rng.gen_range(start..len);
         let selected_slice = &parent_1.indices[start..end];
 
+        // Create a set to store the selected indices
         let mut picked_indices = BTreeSet::from_iter(selected_slice.iter().copied());
+
+        // Initialize a vector to store the child gene indices
         let mut indices = Vec::with_capacity(len);
 
+        // Filter and combine indices from the second parent and the selected indices from the first parent
         let mut filtered_indices = parent_2
             .indices
             .iter()
             .filter(|&idx| picked_indices.insert(*idx));
 
+        // Extend the vector with indices from the second parent before the selected slice
         indices.extend(filtered_indices.borrow_mut().take(start).copied());
+
+        // Add the selected slice from the first parent to the vector
         indices.extend_from_slice(selected_slice);
+
+        // Extend the vector with remaining indices from the second parent after the selected slice
         indices.extend(filtered_indices.copied());
 
-        // Return new Gene with child_indices and mutated probabilities
+        // Create and return a new gene with the combined indices and crossover of probabilities
         Gene {
             indices,
             probs: parent_1.probs.crossover(&parent_2.probs),

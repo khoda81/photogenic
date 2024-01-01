@@ -9,6 +9,7 @@ import("../pkg")
 
         const populationInput = document.getElementById("population");
         const colorInput = document.getElementById("colors");
+        const mutationInput = document.getElementById("mutation_rate");
         const resetBtn = document.getElementById("reset");
 
         let numColors = parseInt(colorInput.value);
@@ -26,10 +27,16 @@ import("../pkg")
             requestAnimationFrame(render);
         };
 
+        function setMutationRate() {
+            const probability = parseFloat(mutationInput.value);
+            algo.mutation_rate = Math.max(Math.min(probability, 1.0), 0.0);
+        }
+
         resetBtn.addEventListener("click", reset);
 
         colorInput.addEventListener("change", () => (numColors = parseInt(colorInput.value)));
         populationInput.addEventListener("change", () => algo.set_population_size(parseInt(populationInput.value)));
+        mutationInput.addEventListener("change", () => setMutationRate());
 
         document.addEventListener("keydown", (event) => {});
 
@@ -39,7 +46,7 @@ import("../pkg")
         }
 
         render();
-
+        setMutationRate();
         setInterval(() => {
             algo.step();
         }, 0);
