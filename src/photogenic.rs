@@ -2,6 +2,7 @@ use std::{borrow::BorrowMut, collections::BTreeSet, iter::FromIterator};
 
 use color_space::{CompareCie2000, Rgb};
 use rand::{seq::SliceRandom, Rng};
+use thiserror::Error;
 
 pub type Color = Rgb;
 
@@ -51,7 +52,10 @@ impl World {
             .sum()
     }
 
-    fn color_pairs<'a>(&'a self, gene: &'a Gene) -> impl Iterator<Item = (Color, Color)> + 'a {
+    fn color_pairs<'a: 'c, 'b: 'c, 'c>(
+        &'a self,
+        gene: &'b Gene,
+    ) -> impl Iterator<Item = (Color, Color)> + 'c {
         self.iter_colors(gene).zip(self.iter_colors(gene).skip(1))
     }
 
@@ -60,38 +64,61 @@ impl World {
     }
 }
 
-fn mutate_prob(value: f64) -> f64 {
-    // You can adjust the mutation range as needed
-    let mutation_range = 0.05;
+// TODO: store the log prob
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+struct Bernoulli(f64);
 
-    // Generate a random value within the mutation range
-    let mutation = rand::thread_rng().gen_range(-mutation_range..mutation_range);
+#[derive(Copy, Clone, Debug, Default, PartialEq, Error)]
+#[error("{0} is not a valid probability (it should be in range [0, 1])")]
+struct InvalidProbabilityError(f64);
 
-    // Apply the mutation to the original value
-    (value + mutation).max(0.0).min(1.0)
+impl Bernoulli {
+    pub fn new(prob: f64) -> Result<Self, InvalidProbabilityError> {
+        if (0.0..=1.0).contains(&prob) {
+            Ok(Bernoulli(prob))
+        } else {
+            Err(InvalidProbabilityError(prob))
+        }
+    }
+
+    pub fn mutate(&mut self) {
+        // You can adjust the mutation range as needed
+        let mutation_range = 0.05;
+
+        // Generate a random value within the mutation range
+        let mutation = rand::thread_rng().gen_range(-mutation_range..mutation_range);
+
+        // TODO: mutate as a log prob
+        // Apply the mutation to the original value
+        self.0 = (self.0 + mutation).max(0.0).min(1.0);
+    }
+
+    pub fn sample(&self) -> bool {
+        rand::thread_rng().gen_bool(self.0)
+    }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct Probs {
-    rotation: f64,
-    reverse: f64,
-    random_rotate: f64,
+    rotation: Bernoulli,
+    reverse: Bernoulli,
+    random_rotate: Bernoulli,
 }
 
 impl Probs {
     fn new() -> Self {
         Probs {
-            rotation: 0.2,
-            reverse: 0.7,
-            random_rotate: 0.2,
+            rotation: Bernoulli::new(0.2).unwrap(),
+            reverse: Bernoulli::new(0.7).unwrap(),
+            random_rotate: Bernoulli::new(0.2).unwrap(),
         }
     }
 
     fn mutate(&mut self) {
         // Mutate each field with a small random value
-        self.rotation = mutate_prob(self.rotation);
-        self.reverse = mutate_prob(self.reverse);
-        self.random_rotate = mutate_prob(self.random_rotate);
+        self.rotation.mutate();
+        self.reverse.mutate();
+        self.random_rotate.mutate();
     }
 
     fn crossover(&self, other: &Self) -> Self {
@@ -119,6 +146,7 @@ impl Probs {
 
 #[derive(Clone, Debug)]
 pub struct Gene {
+    // TODO: use a linked list for faster mutation
     indices: Vec<usize>,
     probs: Probs,
 }
@@ -146,9 +174,9 @@ impl Gene {
     }
 
     fn mutate(&mut self) {
-        if rand::thread_rng().gen_bool(self.probs.rotation) {
+        if self.probs.rotation.sample() {
             self.rotate_random_subsequence()
-        } else if rand::thread_rng().gen_bool(self.probs.reverse) {
+        } else if self.probs.reverse.sample() {
             self.reverse_random_subsequence()
         } else {
             self.swap_random_positions()
@@ -159,7 +187,7 @@ impl Gene {
         let slice = self.indices.select_random_subslice_mut();
         let rng = &mut rand::thread_rng();
 
-        let rotation_amount = if rng.gen_bool(self.probs.random_rotate) {
+        let rotation_amount = if self.probs.random_rotate.sample() {
             rng.gen_range(1..slice.len())
         } else {
             1

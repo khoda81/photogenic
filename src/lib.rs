@@ -39,6 +39,21 @@ impl GeneticAlgorithm {
             .map(|gene| (gene, self.world.fitness(gene)))
             .max_by(|a, b| a.1.total_cmp(&b.1))
     }
+
+    pub fn nth_fittest(&self, index: usize) -> Option<(&Gene, f64)> {
+        self.population.get(index)?;
+
+        let mut fittnesses: Vec<_> = self
+            .population
+            .iter()
+            .map(|gene| (gene, self.world.fitness(gene)))
+            .collect();
+
+        let (_prev, gene, _after) =
+            fittnesses.select_nth_unstable_by(index, |a, b| a.1.total_cmp(&b.1).reverse());
+
+        Some(*gene)
+    }
 }
 
 #[wasm_bindgen]
@@ -151,7 +166,11 @@ pub fn render_best(
     width: f64,
     height: f64,
 ) {
-    let (best_gene, fitness) = algo.fittest().unwrap();
+    let (best_gene, fitness) = match algo.nth_fittest(0) {
+        Some(best) => best,
+        _ => return,
+    };
+
     let colors: Vec<_> = algo.world.iter_colors(best_gene).collect();
     let gen_idx = algo.generation_idx;
 
@@ -159,11 +178,16 @@ pub fn render_best(
 
     // Calculate the width of each bar
     let bar_width = ((width - 24.0) / num_colors).min(10.0);
-    let bar_height = 200.0;
+    let bar_height = 50.0;
+    let vertical_padding = 10.0;
 
     let total_width = bar_width * num_colors;
-    let x = (width - total_width) / 2.0;
-    let y = (height - bar_height) / 2.0;
+    let initial_x = (width - total_width) / 2.0;
+    let top_count = ((height - vertical_padding) / (bar_height + vertical_padding))
+        .floor()
+        .max(1.0);
+
+    let initial_y = (height + vertical_padding - (bar_height + vertical_padding) * top_count) / 2.0;
 
     ctx.clear_rect(0.0, 0.0, width, height);
 
@@ -177,15 +201,25 @@ pub fn render_best(
 
     // ctx.fill_text(&format!("{:.2?}", best_gene.probs()), 10.0, 60.0)
     //     .expect("Failed to draw text");
+    for rank in 0..(top_count as usize) {
+        let (best_gene, _fitness) = match algo.nth_fittest(rank) {
+            Some(best) => best,
+            _ => return,
+        };
 
-    // Loop through each RGB color and draw a vertical bar
-    for (index, color) in colors.into_iter().enumerate() {
-        let color_space::Rgb { r, g, b } = color;
+        // Loop through each RGB color and draw a vertical bar
 
-        // Set the fill style to the current RGB color
-        ctx.set_fill_style(&JsValue::from_str(&format!("rgb({r}, {g}, {b})")));
+        for (index, color) in algo.world.iter_colors(best_gene).enumerate() {
+            let color_space::Rgb { r, g, b } = color;
 
-        // Draw the vertical bar
-        ctx.fill_rect(x + index as f64 * bar_width, y, bar_width, bar_height);
+            // Set the fill style to the current RGB color
+            ctx.set_fill_style(&JsValue::from_str(&format!("rgb({r}, {g}, {b})")));
+
+            // Draw the vertical bar
+            let x = initial_x + index as f64 * bar_width;
+            let y = initial_y + rank as f64 * (bar_height + vertical_padding);
+
+            ctx.fill_rect(x, y, bar_width, bar_height);
+        }
     }
 }
