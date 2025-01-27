@@ -27,7 +27,7 @@ itertools = "0.13.0"
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
 js-sys = "0.3.66"
-getrandom = { version = "0.2.11", features = ["js"] }
+getrandom = { version = "0.3.0", features = ["js"] }
 
 [dependencies.web-sys]
 version = "0.3.4"
