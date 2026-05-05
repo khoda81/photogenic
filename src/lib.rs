@@ -185,13 +185,13 @@ pub fn render_best(
     let initial_x = (width - total_width) / 2.0;
     let top_count = ((height - vertical_padding) / (bar_height + vertical_padding))
         .floor()
-        .max(1.0);
+        .max(5.0);
 
     let initial_y = (height + vertical_padding - (bar_height + vertical_padding) * top_count) / 2.0;
 
     ctx.clear_rect(0.0, 0.0, width, height);
 
-    ctx.set_fill_style(&JsValue::from_str("black")); // Set text color
+    ctx.set_fill_style_str("black"); // Set text color
     ctx.set_font("16px Arial"); // Set font size and type
     ctx.fill_text(&format!("Fitness: {fitness:.2}"), 10.0, 20.0)
         .expect("Failed to draw text");
@@ -213,7 +213,7 @@ pub fn render_best(
             let color_space::Rgb { r, g, b } = color;
 
             // Set the fill style to the current RGB color
-            ctx.set_fill_style(&JsValue::from_str(&format!("rgb({r}, {g}, {b})")));
+            ctx.set_fill_style_str(&format!("rgb({r}, {g}, {b})"));
 
             // Draw the vertical bar
             let x = initial_x + index as f64 * bar_width;

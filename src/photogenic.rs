@@ -42,7 +42,7 @@ impl World {
         })
     }
 
-    pub fn iter_colors<'b: 'a, 'a>(&'a self, gene: &'b Gene) -> impl Iterator<Item = Color> + '_ {
+    pub fn iter_colors<'b: 's, 's>(&'s self, gene: &'b Gene) -> impl Iterator<Item = Color> + 's {
         gene.indices.iter().map(move |&idx| self.colors[idx])
     }
 
@@ -90,7 +90,7 @@ impl Bernoulli {
 
         // TODO: mutate as a log prob
         // Apply the mutation to the original value
-        self.0 = (self.0 + mutation).max(0.0).min(1.0);
+        self.0 = (self.0 + mutation).clamp(0.0, 1.0);
     }
 
     pub fn sample(&self) -> bool {

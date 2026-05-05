@@ -38,7 +38,7 @@ import("../pkg")
         populationInput.addEventListener("change", () => algo.set_population_size(parseInt(populationInput.value)));
         mutationInput.addEventListener("change", () => setMutationRate());
 
-        document.addEventListener("keydown", (event) => {});
+        document.addEventListener("keydown", (event) => { });
 
         function resizeCanvas() {
             canvas.width = canvas.clientWidth;
@@ -47,9 +47,7 @@ import("../pkg")
 
         render();
         setMutationRate();
-        setInterval(() => {
-            algo.step();
-        }, 0);
+        setInterval(() => algo.step(), 0);
 
         resizeCanvas();
 
