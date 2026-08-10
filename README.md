@@ -1,84 +1,55 @@
-<div align="center">
+# Photogenic
 
-  <h1><code>wasm-pack-template</code></h1>
+A browser-based genetic algorithm for arranging random colors into visually smooth sequences.
 
-  <strong>A template for kick starting a Rust and WebAssembly project using <a href="https://github.com/rustwasm/wasm-pack">wasm-pack</a>.</strong>
+The core search is written in Rust and compiled to WebAssembly. Candidate palettes are permutations of the same colors; fitness rewards adjacent colors that are perceptually similar according to **CIEDE2000** distance. The browser renders the best candidates live while the population evolves.
 
-  <p>
-    <a href="https://travis-ci.org/rustwasm/wasm-pack-template"><img src="https://img.shields.io/travis/rustwasm/wasm-pack-template.svg?style=flat-square" alt="Build Status" /></a>
-  </p>
+**Live demo:** https://photogenic-delta.vercel.app
 
-  <h3>
-    <a href="https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html">Tutorial</a>
-    <span> | </span>
-    <a href="https://discordapp.com/channels/442252698964721669/443151097398296587">Chat</a>
-  </h3>
+## How it works
 
-  <sub>Built with 🦀🕸 by <a href="https://rustwasm.github.io/">The Rust and WebAssembly Working Group</a></sub>
-</div>
+1. Generate a set of random RGB colors.
+2. Create a population of random permutations of those colors.
+3. Score each permutation from the perceptual similarity of adjacent colors.
+4. Select parents with fitness-weighted sampling.
+5. Produce the next generation with order-preserving crossover and mutation.
+6. Keep the current best candidate alive between generations.
 
-## About
+Mutations include swapping positions, reversing subsequences, and rotating subsequences. The mutation strategy itself carries probabilities that participate in crossover and mutation.
 
-[**📚 Read this template tutorial! 📚**][template-docs]
+## Interactive controls
 
-This template is designed for compiling Rust libraries into WebAssembly and
-publishing the resulting package to NPM.
+The web UI exposes:
 
-Be sure to check out [other `wasm-pack` tutorials online][tutorials] for other
-templates and usages of `wasm-pack`.
+- **Population** — number of candidate orderings evolved at once
+- **Number of Colors** — palette size
+- **Mutation Rate** — probability of mutating each new child
+- **Reset** — generate a new random color set and population
 
-[tutorials]: https://rustwasm.github.io/docs/wasm-pack/tutorials/index.html
-[template-docs]: https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html
+The canvas displays the highest-fitness candidates together with generation and fitness information.
 
-## 🚴 Usage
+## Tech
 
-### 🐑 Use `cargo generate` to Clone this Template
+- Rust
+- WebAssembly / `wasm-bindgen`
+- HTML Canvas
+- CIEDE2000 perceptual color distance
 
-[Learn more about `cargo generate` here.](https://github.com/ashleygwilliams/cargo-generate)
+## Development
 
-```
-cargo generate --git https://github.com/rustwasm/wasm-pack-template.git --name my-project
-cd my-project
-```
+Build the WebAssembly package and frontend with the existing npm/webpack setup:
 
-### 🛠️ Build with `wasm-pack build`
-
-```
-wasm-pack build
+```bash
+npm install
+npm run build
 ```
 
-### 🔬 Test in Headless Browsers with `wasm-pack test`
+Run the Rust tests with:
 
-```
-wasm-pack test --headless --firefox
-```
-
-### 🎁 Publish to NPM with `wasm-pack publish`
-
-```
-wasm-pack publish
+```bash
+cargo test
 ```
 
-## 🔋 Batteries Included
+## Motivation
 
-* [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) for communicating
-  between WebAssembly and JavaScript.
-* [`console_error_panic_hook`](https://github.com/rustwasm/console_error_panic_hook)
-  for logging panic messages to the developer console.
-* `LICENSE-APACHE` and `LICENSE-MIT`: most Rust projects are licensed this way, so these are included for you
-
-## License
-
-Licensed under either of
-
-* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally
-submitted for inclusion in the work by you, as defined in the Apache-2.0
-license, shall be dual licensed as above, without any additional terms or
-conditions.
+Sorting colors is a small but useful playground for permutation search: the objective is intuitive enough to inspect visually, while the search space grows factorially with the number of colors. That makes it a neat test bed for crossover, mutation, and selection strategies with immediate visual feedback.
